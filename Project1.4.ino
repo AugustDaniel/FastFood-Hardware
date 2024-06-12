@@ -29,13 +29,14 @@ const int finishLine = 4000;
 
 // mqtt drive connection
 bool left = false;
-const String topicLeft = "avanstibreda/ti/1.4/A1/Test/LEFT";
+const String topicLeft = "avanstibreda/ti/1.4/A1/Patty-Power/LEFT";
 bool right = false;
-const String topicRight = "avanstibreda/ti/1.4/A1/Test/RIGHT";
+const String topicRight = "avanstibreda/ti/1.4/A1/Patty-Power/RIGHT";
 bool forward = false;
-const String topicForward = "avanstibreda/ti/1.4/A1/Test/GAS";
+const String topicForward = "avanstibreda/ti/1.4/A1/Patty-Power/GAS";
 bool backwards = false;
-const String topicBackwards = "avanstibreda/ti/1.4/A1/Test/BREAK";
+const String topicBackwards = "avanstibreda/ti/1.4/A1/Patty-Power/BREAK";
+char lastSignal = 's';
 bool isStopped = true;
 
 
@@ -48,8 +49,10 @@ const char *password = "wtke8365";  // Enter WiFi password
 
 // MQTT Broker
 const char *mqtt_broker = "broker.hivemq.com";
-const char *topic = "avanstibreda/ti/1.4/A1/Test/#";
-const char *topicLine = "avanstibreda/ti/1.4/A1/Test/LINE";
+const char *topic = "avanstibreda/ti/1.4/A1/Patty-Power/#";
+const char *topicLine = "avanstibreda/ti/1.4/A1/Patty-Power/LINE";
+const char *topicIsClaimed = "avanstibreda/ti/1.4/A1/Patty-Power/isClaimed";
+const char *topicReset = "avanstibreda/ti/1.4/A1/Patty-Power/RESET";
 const char *mqtt_username = "";
 const char *mqtt_password = "";
 const int mqtt_port = 1883;
@@ -87,7 +90,7 @@ while (!client.connected()) {
 }
 
 // Publish and subscribe  
-    client.publish(topicLine, "connected");
+    client.publish(topicIsClaimed, "f");
     client.subscribe(topic);
   
 	// Set all the motor control pins to outputs
@@ -126,33 +129,41 @@ void callback(char *topic, byte *payload, unsigned int length) {
     String Topic = (String) topic;
     isStopped = false;
 
+    if (Topic == topicReset) {
+      client.publish(topicIsClaimed, "f");
+    }
+
     if(Topic == topicRight) {
-      Serial.println("right");
       if ((char)payload[0] == 't') {
         right = true;
+        lastSignal = 'r';
       } else if ((char)payload[0] == 'f') {
         right = false;
+        lastSignal = 's';
       }
     } else if (Topic == topicLeft) {
-      Serial.println("left");
       if ((char)payload[0] == 't') {
         left = true;
+        lastSignal = 'l';
       } else if ((char)payload[0] == 'f') {
         left = false;
+        lastSignal = 's';
       }
     } else if (Topic == topicForward) {
-      Serial.println("forward");
       if ((char)payload[0] == 't') {
         forward = true;
+        lastSignal = 'f';
       } else if ((char)payload[0] == 'f') {
         forward = false;
+        lastSignal = 's';
       }
     } else if (Topic == topicBackwards) {
-      Serial.println("backwards");
       if ((char)payload[0] == 't') {
         backwards = true;
+        lastSignal = 'b';
       } else if ((char)payload[0] == 'f') {
         backwards = false;
+        lastSignal = 's';
       }
     }
 
@@ -164,16 +175,30 @@ void callback(char *topic, byte *payload, unsigned int length) {
 }
 
 void setServos() {
-  if (left) {
+  Serial.println(lastSignal);
+  if (lastSignal == 's') {
+    if (left) {
+      lastSignal = 'l';
+    } else if (right) {
+      lastSignal = 'r';
+    } else if (forward) {
+      lastSignal = 'f';
+    } else if (backwards) {
+      lastSignal = 'b';
+    } else {
+      stop();
+      return;
+    }
+  }
+
+  if (lastSignal == 'l') {
     driveLeft();
-  } else if (right) {
+  } else if (lastSignal == 'r') {
     driveRight();
-  } else if (forward) {
+  } else if (lastSignal == 'f') {
     driveForward();
-  } else if (backwards) {
+  } else if (lastSignal == 'b') {
     driveBackwards();
-  } else {
-    stop();
   }
 }
 
@@ -200,31 +225,6 @@ void getValues() {
   counter++;
   if (counter == 500) {
     setPwm();
-    //  counter = 0;
-    // if (stop) {
-    //   // Serial.println(gates12);
-    //   Serial.println(pwm12);
-    //   // Serial.println(gates34);
-    //   Serial.println(pwm34);
-    //   return;
-    // }
-    // if (gates12 < prefGates && pwm12 < 255 && !right) {
-    //   pwm12 += 2.5;
-    // } else if (gates12 > prefGates && pwm12 > 0 && !right) {
-    //   pwm12 -= 2.5;
-    // }
-    // if (gates34 < prefGates && pwm34 < 255 && !left) {
-    //   pwm34 += 2.5;
-    // } else if (gates34 > prefGates && pwm34 > 0 && !left) {
-    //   pwm34 -= 2.5;
-    // }
-    // // Serial.println(gates12);
-    // Serial.println(pwm12);
-    // // Serial.println(gates34);
-    // Serial.println(pwm34);
-    // setSpeed();
-    // gates12 = 0;
-    // gates34 = 0;
   }
 
   int valueLight = analogRead(pinLight);
@@ -242,13 +242,13 @@ void getValues() {
 }
 
 void setPwm() {
+  // Serial.println(gates12);
+  // Serial.println(pwm12);
+  // Serial.println(gates34);
+  // Serial.println(pwm34);
   counter = 0;
     if (isStopped) {
       return;
-      // Serial.println(gates12);
-      // Serial.println(pwm12);
-      // Serial.println(gates34);
-      // Serial.println(pwm34);
     }
     if (gates12 < prefGates && pwm12 < 255 && !right) {
       pwm12 += 2.5;
@@ -260,10 +260,6 @@ void setPwm() {
     } else if (gates34 > prefGates && pwm34 > 0 && !left) {
       pwm34 -= 2.5;
     }
-    // Serial.println(gates12);
-    // Serial.println(pwm12);
-    // Serial.println(gates34);
-    // Serial.println(pwm34);
     setSpeed();
     gates12 = 0;
     gates34 = 0;
