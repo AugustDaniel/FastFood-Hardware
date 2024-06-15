@@ -10,9 +10,8 @@ const int in4 = 21;
 
 //light sensor connections
 const int pinLight = 39;
-bool passedRed = false;
-const int checkPoint = 250;
 const int finishLine = 4000;
+bool passedWhite = true;
 
 
 // mqtt drive connection
@@ -24,7 +23,6 @@ const String topicForward = "avanstibreda/ti/1.4/A1/Pepperoni-Racer/GAS";
 bool forward = false;
 const String topicBackwards = "avanstibreda/ti/1.4/A1/Pepperoni-Racer/BREAK";
 bool backwards = false;
-char lastSignal = 's';
 bool isStopped = true;
 
 
@@ -77,7 +75,7 @@ while (!client.connected()) {
 }
 
 // Publish and subscribe  
-    client.publish(topicIsClaimed, "f");
+    client.publish(topicIsClaimed, "f", true);
     client.subscribe(topic);
   
 	// Set all the motor control pins to outputs
@@ -113,44 +111,37 @@ void callback(char *topic, byte *payload, unsigned int length) {
     isStopped = false;
 
     if (Topic == topicReset) {
-      client.publish(topicIsClaimed, "f");
-      left = false;
+      client.publish(topicIsClaimed, "f", true);
       right = false;
+      left = false;
       forward = false;
       backwards = false;
+      stop();
     }
 
     if(Topic == topicRight) {
       if ((char)payload[0] == 't') {
         right = true;
-        lastSignal = 'r';
       } else if ((char)payload[0] == 'f') {
         right = false;
-        lastSignal = 's';
       }
     } else if (Topic == topicLeft) {
       if ((char)payload[0] == 't') {
         left = true;
-        lastSignal = 'l';
       } else if ((char)payload[0] == 'f') {
         left = false;
-        lastSignal = 's';
       }
     } else if (Topic == topicForward) {
       if ((char)payload[0] == 't') {
         forward = true;
-        lastSignal = 'f';
       } else if ((char)payload[0] == 'f') {
         forward = false;
-        lastSignal = 's';
       }
     } else if (Topic == topicBackwards) {
       if ((char)payload[0] == 't') {
         backwards = true;
-        lastSignal = 'b';
       } else if ((char)payload[0] == 'f') {
         backwards = false;
-        lastSignal = 's';
       }
     }
 
@@ -162,78 +153,103 @@ void callback(char *topic, byte *payload, unsigned int length) {
 }
 
 void setServos() {
-  Serial.println(lastSignal);
-  if (lastSignal == 's') {
-    if (left) {
-      lastSignal = 'l';
-    } else if (right) {
-      lastSignal = 'r';
-    } else if (forward) {
-      lastSignal = 'f';
-    } else if (backwards) {
-      lastSignal = 'b';
-    } else {
-      stop();
-      return;
-    }
-  }
-  
-  if (lastSignal == 'l') {
-    driveLeft();
-  } else if (lastSignal == 'r') {
-    driveRight();
-  } else if (lastSignal == 'f') {
-    driveForward();
-  } else if (lastSignal == 'b') {
-    driveBackwards();
+  if (!forward && !left && !right && !backwards) {
+    stop();
+  } else if (forward && left && right) {
+    driveF();
+  } else if (backwards && left && right) {
+    driveB();
+  } else if (forward && left) {
+    driveFL();
+  } else if (forward && right) {
+    driveFR();
+  } else if (backwards && left) {
+    driveBL();
+  } else if (backwards && right) {
+    driveBR();
+  } else if (forward) {
+    driveF();
+  } else if (backwards) {
+    driveB();
+  } else if (left) {
+    driveL();
+  } else if (right) {
+    driveR();
   }
 }
 
 void getValues() {
   int valueLight = analogRead(pinLight);
-  Serial.println(valueLight);
+  // Serial.println(valueLight);
 
-  if(valueLight > finishLine & passedRed){
+  if(valueLight > finishLine && passedWhite){
     client.publish(topicLine, "z");
-    passedRed = false;
+    passedWhite = false;
+  } else if (valueLight < finishLine && !passedWhite) {
+    client.publish(topicLine, "w");
+    passedWhite = true;
   }
-
-  if(valueLight < checkPoint & !passedRed){
-    client.publish(topicLine, "r");
-    passedRed = true;
-  }
+  
 }
 
-void driveForward(){
-  digitalWrite(in1, HIGH);
-	digitalWrite(in2, LOW);
-	digitalWrite(in3, HIGH);
-	digitalWrite(in4, LOW);
+void driveF(){
+  digitalWrite(in1, LOW);
+	digitalWrite(in2, HIGH);
+	digitalWrite(in3, LOW);
+	digitalWrite(in4, HIGH);
   // Serial.print("forward");
 }
 
-void driveLeft(){
+void driveFR() {
   digitalWrite(in1, LOW);
 	digitalWrite(in2, HIGH);
-	digitalWrite(in3, HIGH);
+  digitalWrite(in3, LOW);
 	digitalWrite(in4, LOW);
-  // Serial.print("left");
 }
 
-void driveRight(){
+void driveFL() {
+  digitalWrite(in1, LOW);
+	digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+	digitalWrite(in4, HIGH);
+}
+
+void driveL(){
   digitalWrite(in1, HIGH);
 	digitalWrite(in2, LOW);
 	digitalWrite(in3, LOW);
 	digitalWrite(in4, HIGH);
+  // Serial.print("left");
+}
+
+void driveR(){
+  digitalWrite(in1, LOW);
+	digitalWrite(in2, HIGH);
+	digitalWrite(in3, HIGH);
+	digitalWrite(in4, LOW);
   // Serial.print("right");
 }
 
-void driveBackwards(){
-  digitalWrite(in1, LOW);
-	digitalWrite(in2, HIGH);
-	digitalWrite(in3, LOW);
-	digitalWrite(in4, HIGH);
+void driveB(){
+  digitalWrite(in1, HIGH);
+	digitalWrite(in2, LOW);
+	digitalWrite(in3, HIGH);
+	digitalWrite(in4, LOW);
   // Serial.print("backwards");
+}
+
+void driveBR() {
+  digitalWrite(in1, LOW);
+	digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+	digitalWrite(in4, LOW);
+}
+
+void driveBL() {
+  digitalWrite(in1, HIGH);
+	digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+	digitalWrite(in4, LOW);
 }
 
 void stop(){
